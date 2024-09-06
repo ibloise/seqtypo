@@ -1,10 +1,12 @@
 
 from datetime import date, datetime
-from dataclasses import dataclass
 import re
 from abc import ABC, abstractmethod
 import itertools
 from typing import List, Optional, Literal, Dict
+from pydantic import AnyUrl, Field
+from pydantic.dataclasses import dataclass
+from enum import Enum
 
 # This module provides the basics models for the API. They are all dataclasses to storage the responses
 #TODO: Hay que crear un sistema que permita reconocer los atributos que son URLs
@@ -13,22 +15,27 @@ NAME = 'name'
 DESCRIPTION = 'description'
 HREF = 'href'
 
-SEQDEF = 'seqdef'
-SEQDEF_LARGE = 'sequence/profile definitions'
-ISOLATES = 'isolates'
-OTHERS = 'others'
 
-MLST = 'MLST'
-CGMLST = 'cgMLST'
+class SchemeCategory(Enum):
+    MLST = 'MLST'
+    CGMLST = 'cgMLST'
+    OTHERS = 'others'
+
+
+class DatabaseCategory(Enum):
+    SEQDEF = 'seqdef'
+    SEQDEF_LARGE = 'sequence/profile definitions'
+    ISOLATES = 'isolates'
+    OTHERS = 'others'
 
 
 def determine_category(description: str) -> str:
-    if CGMLST in description:
-        return CGMLST
-    elif MLST in description:
-        return MLST
+    if SchemeCategory.CGMLST.value in description:
+        return SchemeCategory.CGMLST.value
+    elif SchemeCategory.MLST.value in description:
+        return SchemeCategory.MLST.value
     else:
-        return OTHERS
+        return SchemeCategory.OTHERS.value
 
 # Tipos de clases del módulo:
 
@@ -45,11 +52,6 @@ def determine_category(description: str) -> str:
 #   -Collections: Entidades de la API que se caracterizan por ser colecciones de una o más entidades básicas con metadata adicional. 
 #       Las entidades básicas se almacenan en ModelLists mediante especializaciones de los post_init
 
-@dataclass
-class Endpoint:
-    url: str
-
-@dataclass
 class ModelList(ABC):
 
     def __init__(self, data: List):
@@ -145,12 +147,43 @@ class ModelList(ABC):
         pass
 
     def get_urls(self):
+        # Generalizar este método aprovechando pydantic.AnyURL
         url_attr = self._set_url_attr()
 
         if not url_attr:
             raise ValueError()
         
         return [getattr(data, url_attr) for data in self.data]
+
+@dataclass
+class ApiEndpointModel(ABC):
+    # TODO: definir metodo para extraer la url raíz
+    
+    @classmethod
+    def from_json(cls, json):
+        print(cls.__name__)
+        if isinstance(json, dict):
+            return cls(**json)
+        else:
+            raise ValueError('Class must be instantiaded from valid JSON-like objects')
+
+@dataclass
+class ApiColecctionModel(ABC):
+
+    def _set_list_model(self, attr: List[str], api_model: 'ApiEndpointModel', list_model: ModelList):
+
+        attr_values = getattr(self, attr)
+        if not isinstance(attr_values, list):
+            raise ValueError('Only can set list of list attributes')
+        # Declaramos la lista de modelos:
+        try:
+            attr_list = [api_model(**value) for value in attr_values]
+        except Exception as e:
+            raise ValueError(f"Error instantiating {api_model.__name__} objects: {e}")
+        
+        #Instanciamos la clase lista:
+        list_ins = list_model(data = attr_list)
+        setattr(self, attr, list_ins)
 
 
 class ResourceList(ModelList):
@@ -160,7 +193,7 @@ class ResourceList(ModelList):
     def _set_url_attr(self) -> str:
         return None
 
-    
+
 class DatabaseList(ModelList):
 
     def _get_model(self):
@@ -182,68 +215,67 @@ class SchemeList(ModelList):
     def _set_url_attr(self) -> str:
         return 'scheme'
 
-# * API endpoint models
-@dataclass(kw_only=True)
-class ApiEndpointModel(ABC):
-    url: Optional[str] = None  #url de origen del modelo, cuando ha sido instanciado desde queries a la API
 
-class ApiColecctionModel(ABC):
+class ApiResourceModel(ApiEndpointModel, ApiColecctionModel):
+    # url: root
+    databases: List['DatabaseModel']
+    description: str
+    name: str
+    long_description: Optional[str] = None
 
-    def _set_list_model(self, attr: List[str], api_model: 'ApiEndpointModel', list_model: ModelList):
+    def __post_init__(self):
+        self._set_list_model('databases', DatabaseModel, DatabaseList)
 
-        attr_values = getattr(self, attr)
-        if not isinstance(attr_values, list):
-            raise ValueError('Only can set list of list attributes')
-        # Declaramos la lista de modelos:
-        try:
-            attr_list = [api_model(**value) for value in attr_values]
-        except Exception as e:
-            raise ValueError(f"Error instantiating {api_model.__name__} objects: {e}")
-        
-        #Instanciamos la clase lista:
-        list_ins = list_model(data = attr_list)
-        setattr(self, attr, list_ins)
+
+class ApiResourceCollectionModel(ApiEndpointModel, ApiColecctionModel):
+    # url: root
+    resources: List[ApiResourceModel] = None
+
+    def __post_init__(self):
+        self._set_list_model('resources', ApiResourceModel, ResourceList)
+
+    def __iter__(self):
+        return iter(self.resources)
+
 
 @dataclass
 class FullSchemeModel:
     # url: {root}/db/{DatabaseModel.name}/schemes/{id}
     id: int
-    loci: List[str]
+    loci: List[str] #List[Loci]
     description: str
     locus_count: int
     has_primary_key_field: bool 
-    primary_key_field: str = None
+    primary_key_field: AnyUrl = None
     last_updated: datetime = None
     last_added: datetime = None
     profiles_csv: str = None
     records: int = None
     profiles: str = None
-    fields: List[str] = None
+    fields: List[str] = None #List Fields
     curators: Optional[List[str]] = None
     category: Optional[str] = None
 
     def __post_init__(self):
         self.category = determine_category(self.description)
 
-
 @dataclass
-class SchemeModel:
+class SchemeModel(ApiEndpointModel):
     # No url
-    scheme: str
+    scheme: AnyUrl
     description: str
-    category: Optional[Literal[MLST, CGMLST, OTHERS]] = None
+    category: Optional[SchemeCategory] = None
     query_endpoint: Optional[str] = None
 
     def __post_init__(self):
         self.category = determine_category(self.description)
         self.query_endpoint = f'{self.scheme}/sequence'
 
-
 @dataclass
 class SchemeCollectionModel(ApiEndpointModel, ApiColecctionModel):
     # url: {root}/db/{DatabaseModel.name}/schemes
     records: int
-    schemes: List[SchemeModel]
+    schemes: List[Dict] # Converted in SchemeModel by post_init
 
     def __post_init__(self):
         self._set_list_model('schemes', SchemeModel, SchemeList)
@@ -322,24 +354,24 @@ class LociCollectionModel:
 @dataclass
 class FullDatabaseModel:
     # url: {root}/db/{DatabaseModel.name}
-    schemes: Optional[str]
-    loci: Optional[str]
-    submissions: Optional[str] = None
-    curators: Optional[str] = None
-    isolates: Optional[str] = None
-    sequences: Optional[str] = None
-    genomes: Optional[str] = None
-    fields: Optional[str] = None
-    projects: Optional[str] = None
+    schemes: Optional[AnyUrl]
+    loci: Optional[AnyUrl]
+    submissions: Optional[AnyUrl] = None
+    curators: Optional[AnyUrl] = None
+    isolates: Optional[AnyUrl] = None
+    sequences: Optional[AnyUrl] = None
+    genomes: Optional[AnyUrl] = None
+    fields: Optional[AnyUrl] = None
+    projects: Optional[AnyUrl] = None
 
 
 @dataclass
 class DatabaseModel:
     # no url
     description: str
-    href: str
+    href: AnyUrl
     name: str
-    category: Optional[Literal[SEQDEF, ISOLATES, OTHERS]] = None
+    category: Optional[DatabaseCategory] = None
     subject: Optional[str] = None
 
     def __post_init__(self) -> None:
@@ -347,21 +379,21 @@ class DatabaseModel:
         self.subject = self._parse_subject()
 
     def _determine_category(self) -> str:
-        if SEQDEF in self.name:
-            return SEQDEF
-        elif ISOLATES in self.name:
-            return ISOLATES
+        if DatabaseCategory.SEQDEF.value in self.name:
+            return DatabaseCategory.SEQDEF.value
+        elif DatabaseCategory.ISOLATES.value in self.name:
+            return DatabaseCategory.ISOLATES.value
         else:
-            return OTHERS
+            return DatabaseCategory.OTHERS.value
 
     def _parse_subject(self) -> str:
         # Lista de patrones a eliminar
         patterns_to_remove = [
             r'REST API access to ',
             r' database',
-            ISOLATES,
-            SEQDEF_LARGE,
-            SEQDEF
+            DatabaseCategory.ISOLATES.value,
+            DatabaseCategory.SEQDEF_LARGE.value,
+            DatabaseCategory.SEQDEF.value
         ]
 
         # Limpiar la descripción
@@ -372,28 +404,6 @@ class DatabaseModel:
         return subject.strip()
 
 
-@dataclass
-class ApiResourceModel(ApiEndpointModel, ApiColecctionModel):
-    # url: root
-    databases: List[DatabaseModel]
-    description: str
-    name: str
-    long_description: Optional[str] = None
-
-    def __post_init__(self):
-        self._set_list_model('databases', DatabaseModel, DatabaseList)
-
-
-@dataclass
-class ApiResourceCollectionModel(ApiEndpointModel, ApiColecctionModel):
-    # url: root
-    resources: List[ApiResourceModel] = None
-
-    def __post_init__(self):
-        self._set_list_model('resources', ApiResourceModel, ResourceList)
-
-    def __iter__(self):
-        return iter(self.resources)
 
 
 @dataclass
@@ -434,7 +444,7 @@ class SequenceQueryResult:
 
 @dataclass
 class rMLSTResultModel(SequenceQueryResult):
-    taxon_prediction: List[TaxonModel] = None
+    taxon_prediction: List[Dict] = None
 
     def __post_init__(self):
 

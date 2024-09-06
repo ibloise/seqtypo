@@ -204,7 +204,8 @@ class ApiModelService(ApiService):
         """
         rest = RestClient(api_key, ssl_verify)
         metadata = rest.get(url)
-        model = cls._base_model(**metadata.json())
+        print(metadata.json())
+        model = cls._base_model.from_json(metadata.json())
         return cls(model, api_key, ssl_verify)
 
 class ResourceApi(ApiModelService):
