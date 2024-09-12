@@ -134,6 +134,7 @@ class BigSdbApi(ApiService):
         """
 
         resources = ResourceApi.from_url(self.hostname)
+        print(resources.model)
         return resources.model.resources
     
     def get_databases(self, pattern: str = None, category: str = None, 
@@ -204,7 +205,6 @@ class ApiModelService(ApiService):
         """
         rest = RestClient(api_key, ssl_verify)
         metadata = rest.get(url)
-        print(metadata.json())
         model = cls._base_model.from_json(metadata.json())
         return cls(model, api_key, ssl_verify)
 
@@ -222,6 +222,27 @@ class ResourceApi(ApiModelService):
     """
 
     _base_model = models.ApiResourceCollectionModel
+    
+    @classmethod
+    def from_url(cls, url, api_key: str = '', ssl_verify: bool = True) -> 'ApiModelService':
+        """
+        Creates an instance of ApiModelService from a URL that provides data to initialize the model.
+
+        Args:
+            url (str): The URL from which to fetch the model data.
+            api_key (str, optional): The API key for authentication. Default is an empty string.
+            ssl_verify (bool, optional): Flag indicating whether SSL verification should be performed. Default is True.
+
+        Returns:
+            ApiModelService: An instance of ApiModelService initialized with the model data fetched from the URL.
+        """
+        rest = RestClient(api_key, ssl_verify) #TODO: Arreglar la inversión de la dependencia
+        metadata = rest.get(url)
+        
+        model = cls._base_model.from_json(metadata.json())
+        print(model)
+        return cls(model, api_key, ssl_verify)
+
 
 
 class FullDatabaseApi(ApiModelService):

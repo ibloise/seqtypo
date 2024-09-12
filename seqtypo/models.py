@@ -154,6 +154,13 @@ class ModelList(ABC):
             raise ValueError()
         
         return [getattr(data, url_attr) for data in self.data]
+    
+    @classmethod
+    def from_json(cls, json: List[Dict]) -> 'ModelList':
+        if isinstance(json, list):
+            return cls(data=json)
+        else:
+            raise ValueError(f'JSON object must be list object. {type(json)} provided')
 
 @dataclass
 class ApiEndpointModel(ABC):
@@ -165,7 +172,7 @@ class ApiEndpointModel(ABC):
         if isinstance(json, dict):
             return cls(**json)
         else:
-            raise ValueError('Class must be instantiaded from valid JSON-like objects')
+            raise ValueError('Class must be instantiaded from valid dict objects')
 
 @dataclass
 class ApiColecctionModel(ABC):
@@ -184,7 +191,8 @@ class ApiColecctionModel(ABC):
         #Instanciamos la clase lista:
         list_ins = list_model(data = attr_list)
         setattr(self, attr, list_ins)
-
+    
+            
 
 class ResourceList(ModelList):
     def _get_model(self):
@@ -216,9 +224,10 @@ class SchemeList(ModelList):
         return 'scheme'
 
 
+@dataclass
 class ApiResourceModel(ApiEndpointModel, ApiColecctionModel):
     # url: root
-    databases: List['DatabaseModel']
+    databases: List[Dict]
     description: str
     name: str
     long_description: Optional[str] = None
@@ -227,15 +236,24 @@ class ApiResourceModel(ApiEndpointModel, ApiColecctionModel):
         self._set_list_model('databases', DatabaseModel, DatabaseList)
 
 
+@dataclass
 class ApiResourceCollectionModel(ApiEndpointModel, ApiColecctionModel):
     # url: root
-    resources: List[ApiResourceModel] = None
+    resources: List[Dict] = None
 
     def __post_init__(self):
         self._set_list_model('resources', ApiResourceModel, ResourceList)
 
     def __iter__(self):
         return iter(self.resources)
+    
+    @classmethod
+    def from_json(cls, json) -> 'ApiResourceCollectionModel':
+        #TODO: Hay que cambiar toda la metodología de los from_json para evitar este problema (violación de SOLID)
+        if isinstance(json, list):
+            return cls(resources=json)
+        else:
+            raise ValueError('ApiResourceCollectionModel must be instantited from list JSON objects')
 
 
 @dataclass
