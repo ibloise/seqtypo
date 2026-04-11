@@ -20,6 +20,10 @@ class ApiServiceError(Exception):
     def __init__(self, status_code, message):
         super().__init__(f"Error {status_code}: {message}")
 
+
+class MissingQueryEndpointError(ValueError):
+    """Raised when no query endpoint has been configured."""
+
 class RestClient:
     # Thanks to https://www.pretzellogix.net/2021/12/08/step-3-understanding-wet-code-dry-code-and-refactoring-the-low-level-rest-adapter/
     """
@@ -61,8 +65,7 @@ class RestClient:
     def _do_request(self, url: str, http_method: str, headers: dict[str, str] = None, **kwargs) -> requests.Response:
 
         try:
-            headers = headers or {}
-            headers.update(self._headers)
+            headers = {**self._headers, **(headers or {})}
             response = requests.request(
                 method=http_method, url=url, verify=self._ssl_verify, 
                 headers=headers,
@@ -72,6 +75,8 @@ class RestClient:
             return response
         except requests.HTTPError as e:
             raise ApiServiceError(response.status_code, response.reason) from e
+        except requests.RequestException as e:
+            raise ApiServiceError(-1, str(e)) from e
 
     def get(self, url: str, **kwargs) -> requests.Response:
         return self._do_request(url=url, http_method="GET", **kwargs)
@@ -203,7 +208,6 @@ class ApiModelService(ApiService):
         """
         rest = RestClient(api_key, ssl_verify)
         metadata = rest.get(url)
-        print(metadata.json())
         model = cls._base_model.from_json(metadata.json())
         return cls(model, api_key, ssl_verify)
 
@@ -264,7 +268,7 @@ class SchemeCollectionApi(ApiModelService):
     _base_model = models.SchemeCollectionModel
 
     def return_scheme_by_idx(self, idx: int | str) -> models.SchemeModel:
-        index_dict = {scheme.scheme.split('/')[-1] : scheme for scheme in self.model}
+        index_dict = {str(scheme.scheme).split('/')[-1]: scheme for scheme in self.model}
         idx = str(idx)
         if idx in index_dict:
             return index_dict[idx]
@@ -283,16 +287,26 @@ class SequenceQueryHandler(ApiService):
             self.query_endpoint = query_endpoint
 
     def query_sequence(self, sequence: str, details: bool = False, partial_matches: bool = True, **kwargs) -> dict:
-        # Hay que generalizar este método
-        base_64 = utils.is_base64(sequence)
-        payload = {
-            'sequence' : sequence,
-            'details' : details,
-            'partial_matches': partial_matches,
-            'base64' : base_64
-        }
+        if not self.query_endpoint:
+            raise MissingQueryEndpointError('A query endpoint must be configured before querying sequences')
+
+        payload = self._build_payload(
+            sequence=sequence,
+            details=details,
+            partial_matches=partial_matches,
+        )
         response = self.rest_client.post(self.query_endpoint, json=payload, **kwargs)
         return response.json()
+
+    @staticmethod
+    def _build_payload(sequence: str, details: bool, partial_matches: bool) -> dict:
+        # Hay que generalizar este método
+        return {
+            'sequence': sequence,
+            'details': details,
+            'partial_matches': partial_matches,
+            'base64': utils.is_base64(sequence),
+        }
 
 class SchemeApi(ApiModelService):
     _base_model = models.SchemeModel

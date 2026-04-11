@@ -154,7 +154,7 @@ def test_full_database_api_get_schemes(monkeypatch):
     assert schemes[0].query_endpoint.endswith("/sequence")
 
 
-def test_scheme_collection_return_by_idx_current_behavior():
+def test_scheme_collection_return_by_idx():
     collection = models.SchemeCollectionModel(
         records=2,
         schemes=[
@@ -165,5 +165,6 @@ def test_scheme_collection_return_by_idx_current_behavior():
 
     service = api.SchemeCollectionApi(collection)
 
-    with pytest.raises(AttributeError):
-        service.return_scheme_by_idx(11)
+    result = service.return_scheme_by_idx(11)
+
+    assert str(result.scheme).endswith("/11")

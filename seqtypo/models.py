@@ -1,12 +1,13 @@
 
-from datetime import date, datetime
+import itertools
 import re
 from abc import ABC, abstractmethod
-import itertools
-from typing import Optional
-from pydantic import AnyUrl, Field
-from pydantic.dataclasses import dataclass
+from datetime import date, datetime
 from enum import Enum
+from typing import Optional
+
+from pydantic import AnyUrl
+from pydantic.dataclasses import dataclass
 
 # This module provides the basics models for the API. They are all dataclasses to storage the responses
 #TODO: Hay que crear un sistema que permita reconocer los atributos que son URLs
@@ -134,7 +135,7 @@ class ModelList(ABC):
 
     @classmethod
     def from_list_of_model_lists(cls, data: list['ModelList']) -> 'ModelList':
-        data_list = [model.data for model in data]
+        data_list = [model.get_content() for model in data]
         flatten_list = list(itertools.chain(*data_list))
         return cls(flatten_list)
 
@@ -161,7 +162,6 @@ class ApiEndpointModel(ABC):
     
     @classmethod
     def from_json(cls, json):
-        print(cls.__name__)
         if isinstance(json, dict):
             return cls(**json)
         else:
@@ -177,7 +177,10 @@ class ApiColecctionModel(ABC):
             raise ValueError('Only can set list of list attributes')
         # Declaramos la lista de modelos:
         try:
-            attr_list = [api_model(**value) for value in attr_values]
+            attr_list = [
+                value if isinstance(value, api_model) else api_model(**value)
+                for value in attr_values
+            ]
         except Exception as e:
             raise ValueError(f"Error instantiating {api_model.__name__} objects: {e}")
         
@@ -216,6 +219,7 @@ class SchemeList(ModelList):
         return 'scheme'
 
 
+@dataclass
 class ApiResourceModel(ApiEndpointModel, ApiColecctionModel):
     # url: root
     databases: list['DatabaseModel']
@@ -227,6 +231,7 @@ class ApiResourceModel(ApiEndpointModel, ApiColecctionModel):
         self._set_list_model('databases', DatabaseModel, DatabaseList)
 
 
+@dataclass
 class ApiResourceCollectionModel(ApiEndpointModel, ApiColecctionModel):
     # url: root
     resources: Optional[list[ApiResourceModel]] = None
@@ -435,6 +440,10 @@ class SequenceQueryResult:
     fields: Optional[dict] = None
 
     def __post_init__(self):
+        if not self.exact_matches:
+            self.exact_matches = []
+            return
+
         exact_matches = []
         for allele, matches in self.exact_matches.items():
             exact_matches.extend([
