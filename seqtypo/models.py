@@ -8,6 +8,7 @@ from typing import Optional
 
 from pydantic import AnyUrl
 from pydantic.dataclasses import dataclass
+from .logging_utils import get_logger
 
 # This module provides the basics models for the API. They are all dataclasses to storage the responses
 #TODO: Hay que crear un sistema que permita reconocer los atributos que son URLs
@@ -213,7 +214,8 @@ class SchemeList(ModelList):
 
     def get_content(self):
         for data in self.data:
-            print(f'{data.description}: {data.scheme}')
+            get_logger().info('%s: %s', data.description, data.scheme)
+        return self.data
 
     def _set_url_attr(self) -> str:
         return 'scheme'
