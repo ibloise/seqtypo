@@ -1,6 +1,5 @@
 
 import requests
-from typing import List, Dict
 
 import pandas as pd
 from io import StringIO
@@ -56,10 +55,10 @@ class RestClient:
         self._ssl_verify = ssl_verify
         self._headers = {}
     
-    def set_headers(self, headers: Dict[str, str]) -> None:
+    def set_headers(self, headers: dict[str, str]) -> None:
         self._headers.update(headers)
     
-    def _do_request(self, url, http_method: str, headers: Dict = None, **kwargs) -> requests.Response:
+    def _do_request(self, url: str, http_method: str, headers: dict[str, str] = None, **kwargs) -> requests.Response:
 
         try:
             headers = headers or {}
@@ -74,10 +73,10 @@ class RestClient:
         except requests.HTTPError as e:
             raise ApiServiceError(response.status_code, response.reason) from e
 
-    def get(self,url, **kwargs) -> requests.Response:
+    def get(self, url: str, **kwargs) -> requests.Response:
         return self._do_request(url=url, http_method="GET", **kwargs)
 
-    def post(self,url, **kwargs) -> requests.Response:
+    def post(self, url: str, **kwargs) -> requests.Response:
         return self._do_request(url=url, http_method="POST", **kwargs)
 
 
@@ -185,12 +184,12 @@ class ApiModelService(ApiService):
     """
     _base_model = None
 
-    def __init__(self, model, api_key: str = '', ssl_verify: bool = True) -> None:
+    def __init__(self, model: object, api_key: str = '', ssl_verify: bool = True) -> None:
         super().__init__(api_key, ssl_verify)
         self.model = model
 
     @classmethod
-    def from_url(cls, url, api_key: str = '', ssl_verify: bool = True) -> 'ApiModelService':
+    def from_url(cls, url: str, api_key: str = '', ssl_verify: bool = True) -> 'ApiModelService':
         """
         Creates an instance of ApiModelService from a URL that provides data to initialize the model.
 
@@ -264,7 +263,7 @@ class FullDatabaseApi(ApiModelService):
 class SchemeCollectionApi(ApiModelService):
     _base_model = models.SchemeCollectionModel
 
-    def return_scheme_by_idx(self, idx):
+    def return_scheme_by_idx(self, idx: int | str) -> models.SchemeModel:
         index_dict = {scheme.scheme.split('/')[-1] : scheme for scheme in self.model}
         idx = str(idx)
         if idx in index_dict:
@@ -283,7 +282,7 @@ class SequenceQueryHandler(ApiService):
         if query_endpoint:
             self.query_endpoint = query_endpoint
 
-    def query_sequence(self, sequence, details: bool = False, partial_matches: bool = True, **kwargs ) -> Dict:
+    def query_sequence(self, sequence: str, details: bool = False, partial_matches: bool = True, **kwargs) -> dict:
         # Hay que generalizar este método
         base_64 = utils.is_base64(sequence)
         payload = {
@@ -303,7 +302,7 @@ class SchemeApi(ApiModelService):
         full_scheme = models.FullSchemeModel(**response.json())
         return full_scheme
 
-    def query_sequence(self, sequence, details: bool = True, partial_matches: bool = True, **kwargs ):
+    def query_sequence(self, sequence: str, details: bool = True, partial_matches: bool = True, **kwargs) -> models.SchemeQueryResult:
 
         sequence_handler = SequenceQueryHandler(self.model.query_endpoint)
         response = sequence_handler.query_sequence(sequence, details, partial_matches, **kwargs)
@@ -325,16 +324,16 @@ class FullSchemeApi(ApiModelService):
         df = pd.read_table(data)
         return df
 
-    def list_loci(self) -> List[str]:
+    def list_loci(self) -> list[str]:
 
         return [loci for loci in self._indexed_locis.keys()]
     
-    def _index_loci(self) -> Dict[str, str]:
+    def _index_loci(self) -> dict[str, str]:
 
         locis = {loci.split('/')[-1] : loci for loci in self.model.loci}
         return locis
 
-    def get_alleles_fasta(self, loci: str):
+    def get_alleles_fasta(self, loci: str) -> SeqIO.FastaIO.FastaIterator | None:
 
         if loci in self._indexed_locis:
             loci_serv = LociApi.from_url(self._indexed_locis[loci])
@@ -343,7 +342,7 @@ class FullSchemeApi(ApiModelService):
             print('Loci does not exits') # COnvertir en raise error
             return None
 
-    def get_scheme_fastas(self):
+    def get_scheme_fastas(self) -> dict[str, SeqIO.FastaIO.FastaIterator | None]:
         # Get all the alleles!
         return {loci: self.get_alleles_fasta(loci) for loci in self._indexed_locis.keys()}
 
@@ -358,7 +357,7 @@ class LociApi(ApiModelService):
         return fasta
 
     @classmethod
-    def from_url(cls, url ,api_key: str = '', ssl_verify: bool = True) -> 'LociApi':
+    def from_url(cls, url: str, api_key: str = '', ssl_verify: bool = True) -> 'LociApi':
         rest_client = RestClient(api_key=api_key, ssl_verify=ssl_verify)
         data = rest_client.get(url)
         loci = models.LociModel(**data.json())
@@ -369,7 +368,7 @@ class LociApi(ApiModelService):
 class rMLST(SequenceQueryHandler):
     query_endpoint = 'http://rest.pubmlst.org/db/pubmlst_rmlst_seqdef_kiosk/schemes/1/sequence'
 
-    def query_sequence(self, sequence, details: bool = True, partial_matches: bool = False, **kwargs):
+    def query_sequence(self, sequence: str, details: bool = True, partial_matches: bool = False, **kwargs) -> models.rMLSTResultModel:
         response =  super().query_sequence(sequence, details, partial_matches, **kwargs)
         result = models.rMLSTResultModel(**response)
         return result

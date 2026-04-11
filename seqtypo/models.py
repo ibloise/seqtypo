@@ -3,7 +3,7 @@ from datetime import date, datetime
 import re
 from abc import ABC, abstractmethod
 import itertools
-from typing import List, Optional, Literal, Dict
+from typing import Optional
 from pydantic import AnyUrl, Field
 from pydantic.dataclasses import dataclass
 from enum import Enum
@@ -54,7 +54,7 @@ def determine_category(description: str) -> str:
 
 class ModelList(ABC):
 
-    def __init__(self, data: List):
+    def __init__(self, data: list):
 
         self.data = data
         self.model = self._get_model()
@@ -119,7 +119,7 @@ class ModelList(ABC):
         data_repr = ', '.join(repr(data) for data in self.data)
         return f'{self.__class__.__name__}({data_repr})'
     
-    def get_content(self) -> List['ApiEndpointModel']:
+    def get_content(self) -> list['ApiEndpointModel']:
         return self.data
     
     def append(self, data: 'ApiEndpointModel') -> None:
@@ -128,12 +128,12 @@ class ModelList(ABC):
         else:
             raise ValueError(f'model data must be instnace of {self.model}')
     
-    def extend(self, data: List['ApiEndpointModel']) -> None:
+    def extend(self, data: list['ApiEndpointModel']) -> None:
         self._validate_input(data)
         self.data.extend(data)
 
     @classmethod
-    def from_list_of_model_lists(cls, data: List['ModelList']) -> 'ModelList':
+    def from_list_of_model_lists(cls, data: list['ModelList']) -> 'ModelList':
         data_list = [model.data for model in data]
         flatten_list = list(itertools.chain(*data_list))
         return cls(flatten_list)
@@ -170,7 +170,7 @@ class ApiEndpointModel(ABC):
 @dataclass
 class ApiColecctionModel(ABC):
 
-    def _set_list_model(self, attr: List[str], api_model: 'ApiEndpointModel', list_model: ModelList):
+    def _set_list_model(self, attr: str, api_model: 'ApiEndpointModel', list_model: ModelList):
 
         attr_values = getattr(self, attr)
         if not isinstance(attr_values, list):
@@ -218,7 +218,7 @@ class SchemeList(ModelList):
 
 class ApiResourceModel(ApiEndpointModel, ApiColecctionModel):
     # url: root
-    databases: List['DatabaseModel']
+    databases: list['DatabaseModel']
     description: str
     name: str
     long_description: Optional[str] = None
@@ -229,7 +229,7 @@ class ApiResourceModel(ApiEndpointModel, ApiColecctionModel):
 
 class ApiResourceCollectionModel(ApiEndpointModel, ApiColecctionModel):
     # url: root
-    resources: List[ApiResourceModel] = None
+    resources: Optional[list[ApiResourceModel]] = None
 
     def __post_init__(self):
         self._set_list_model('resources', ApiResourceModel, ResourceList)
@@ -242,7 +242,7 @@ class ApiResourceCollectionModel(ApiEndpointModel, ApiColecctionModel):
 class FullSchemeModel:
     # url: {root}/db/{DatabaseModel.name}/schemes/{id}
     id: int
-    loci: List[str] #List[Loci]
+    loci: list[str] #List[Loci]
     description: str
     locus_count: int
     has_primary_key_field: bool 
@@ -252,8 +252,8 @@ class FullSchemeModel:
     profiles_csv: str = None
     records: int = None
     profiles: str = None
-    fields: List[str] = None #List Fields
-    curators: Optional[List[str]] = None
+    fields: Optional[list[str]] = None #List Fields
+    curators: Optional[list[str]] = None
     category: Optional[str] = None
 
     def __post_init__(self):
@@ -275,7 +275,7 @@ class SchemeModel(ApiEndpointModel):
 class SchemeCollectionModel(ApiEndpointModel, ApiColecctionModel):
     # url: {root}/db/{DatabaseModel.name}/schemes
     records: int
-    schemes: List[Dict] # Converted in SchemeModel by post_init
+    schemes: list[dict] # Converted in SchemeModel by post_init
 
     def __post_init__(self):
         self._set_list_model('schemes', SchemeModel, SchemeList)
@@ -288,12 +288,12 @@ class SchemeCollectionModel(ApiEndpointModel, ApiColecctionModel):
 class LocusModel:
     id: str
     data_type: str
-    schemes: List[SchemeModel] # Revisar esto
+    schemes: list[SchemeModel] # Revisar esto
     coding_sequence: bool
     alleles: str
     allele_id_format: str
     length_varies: bool
-    curators: List[str]
+    curators: list[str]
     alleles_fasta: str
     length: int
 
@@ -320,7 +320,7 @@ class PagingModel:
 @dataclass
 class AlleleCollectionModel:
     last_updated: datetime
-    alleles: List[AlleleModel]
+    alleles: list[AlleleModel]
     paging: PagingModel
     records: int
 
@@ -329,11 +329,11 @@ class AlleleCollectionModel:
 class LociModel:
     coding_sequence: bool
     alleles: str
-    schemes: List[SchemeModel]
+    schemes: list[SchemeModel]
     allele_id_format: str
     length_varies: bool
     length: int
-    curators: List[str]
+    curators: list[str]
     alleles_fasta: str
     id: str
     data_type: str
@@ -342,8 +342,8 @@ class LociModel:
 @dataclass
 class LociCollectionModel:
     records: int
-    loci: List[str]
-    paging: Optional[List[PagingModel]] = None
+    loci: list[str]
+    paging: Optional[list[PagingModel]] = None
 
     def __post_init__(self):
 
@@ -426,13 +426,13 @@ class AlleleExactResult:
     orientation: str = None
     length: int = None
     contig: str = None
-    linked_data: Dict = None
+    linked_data: Optional[dict] = None
 
 @dataclass
 class SequenceQueryResult:
-    exact_matches: Dict = None # Convertir en AlleleExactResultList para dotarle de métodos
-    partial_matches: Dict = None
-    fields: Dict = None
+    exact_matches: Optional[dict] = None # Convertir en AlleleExactResultList para dotarle de métodos
+    partial_matches: Optional[dict] = None
+    fields: Optional[dict] = None
 
     def __post_init__(self):
         exact_matches = []
@@ -444,7 +444,7 @@ class SequenceQueryResult:
 
 @dataclass
 class rMLSTResultModel(SequenceQueryResult):
-    taxon_prediction: List[Dict] = None
+    taxon_prediction: Optional[list[dict]] = None
 
     def __post_init__(self):
 
