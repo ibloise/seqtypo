@@ -5,6 +5,7 @@ import pandas as pd
 from io import StringIO
 from Bio import SeqIO
 from . import models, utils
+from .logging_utils import get_logger
 
 # This module provide the services to interact with the API. It relies in the API models
 
@@ -353,7 +354,7 @@ class FullSchemeApi(ApiModelService):
             loci_serv = LociApi.from_url(self._indexed_locis[loci])
             return loci_serv.get_alleles()
         else:
-            print('Loci does not exits') # COnvertir en raise error
+            get_logger().warning('Loci does not exist: %s', loci) # COnvertir en raise error
             return None
 
     def get_scheme_fastas(self) -> dict[str, SeqIO.FastaIO.FastaIterator | None]:
