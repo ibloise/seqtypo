@@ -1,6 +1,6 @@
 import base64
 
-def base64_parser(string: str):
+def base64_parser(string: str) -> str:
     encoded = base64.b64encode(string.encode()).decode()
     return encoded
 
@@ -12,4 +12,3 @@ def is_base64(string: str) -> bool:
         return True
     except Exception:
         return False
-
