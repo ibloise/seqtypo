@@ -72,7 +72,7 @@ def test_rmlst_result_model_maps_taxonomy():
     assert result.taxon_prediction[0].taxonomy == ["Life", "Bacteria"]
 
 
-def test_api_resource_collection_model_current_behavior():
+def test_api_resource_collection_model_maps_resource_list():
     collection = models.ApiResourceCollectionModel(
         resources=[
             {
@@ -89,7 +89,8 @@ def test_api_resource_collection_model_current_behavior():
         ]
     )
 
-    assert collection.resources is None
+    assert isinstance(collection.resources, models.ResourceList)
+    assert len(collection.resources) == 1
 
 
 def test_api_endpoint_model_from_json_rejects_invalid_types():
